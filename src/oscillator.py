@@ -38,7 +38,7 @@ def euler_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
         v_hist.append(v)
         e_hist.append(e)
 
-    return [np.array(t_hist), np.array(x_hist), np.array(v_hist), np.array(e_hist)]
+    return np.array(t_hist), np.array(x_hist), np.array(v_hist), np.array(e_hist)
 
 
 def rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
@@ -61,7 +61,7 @@ def rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
         x_hist.append(x)
         v_hist.append(v)
         e_hist.append(e)
-    return [np.array(t_hist), np.array(x_hist), np.array(v_hist), np.array(e_hist)]
+    return np.array(t_hist), np.array(x_hist), np.array(v_hist), np.array(e_hist)
 
 
 def scipy_ivp(m, k, c, omega, F0, x0, v0, dt, tmax):
@@ -77,7 +77,7 @@ def scipy_ivp(m, k, c, omega, F0, x0, v0, dt, tmax):
     x_hist = Y[0]
     v_hist = Y[1]
     e_hist = 1/2 * m * v_hist**2 + 1/2 * k * x_hist**2
-    return [t_hist, x_hist, v_hist, e_hist]
+    return t_hist, x_hist, v_hist, e_hist
 
 
 def amp_phase(m, k, c, omega, F0):
@@ -86,6 +86,12 @@ def amp_phase(m, k, c, omega, F0):
     X = (F0 / m) / np.sqrt((omega0**2 - omega**2) ** 2 + (2 * beta * omega) ** 2)
     phi = np.arctan2(2 * beta * omega, (omega0**2 - omega**2))
     return X, phi
+
+
+def steady_amp(t, x, fraction=0.5):
+    n = int((1.0 - fraction) * len(t))
+    xt = x[n:]
+    return 0.5 * (np.max(xt) - np.min(xt))
 
 
 def analytic_resonance(m, k, c):

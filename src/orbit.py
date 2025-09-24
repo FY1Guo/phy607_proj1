@@ -1,11 +1,12 @@
 import numpy as np
 
 
-def period_integrand(theta, a, e, mu, m):
+def period_integrand(a, e, mu, m):
     p = a * (1 - e**2)
     L = m * np.sqrt(mu * p)
-    integrand = p**2 * m / L / (1 + e * np.cos(theta))**2
-    return integrand
+    def f(theta):
+        return (p**2 * m / L) / (1 + e * np.cos(theta))**2
+    return f
 
 
 def period_kepler(a, mu):
