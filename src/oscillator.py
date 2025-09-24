@@ -7,6 +7,7 @@ c = 0.2
 omega = 2
 F0 = 1
 
+
 def rhs(t, x, v, m, k, c, omega, F0):
     a = (F0 * np.cos(omega * t) - c * v - k * x) / m
     return v, a
@@ -63,7 +64,7 @@ def rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
     return [np.array(t_hist), np.array(x_hist), np.array(v_hist), np.array(e_hist)]
 
 
-def scipy_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
+def scipy_ivp(m, k, c, omega, F0, x0, v0, dt, tmax):
     from scipy.integrate import solve_ivp
     t_hist = np.arange(0.0, tmax, dt)
     def f(t, y):
@@ -87,7 +88,16 @@ def amp_phase(m, k, c, omega, F0):
     return X, phi
 
 
-def analytic_solution(m, k, c, omega, F0, x0, v0):
+def analytic_resonance(m, k, c):
+    omega0 = np.sqrt(k / m)
+    beta = c / (2 * m)
+    if beta < omega0:
+        return np.sqrt(omega0**2 - 2 * beta**2)
+    else:
+        print("Not in underdamped regime, resonant frequency not defined")
+
+
+def analytic_oscillator(m, k, c, omega, F0, x0, v0):
     omega0 = np.sqrt(k / m)
     beta = c / (2 * m)
     X, phi = amp_phase(m, k, c, omega, F0)
