@@ -81,51 +81,63 @@ def run_orbit(args):
     T_ana = period_kepler(a, mu)
     f = period_integrand(a, e, mu)
 
-    if args.method == "riemann":
-        T_sim = riemann(f, 0.0, 2.0*np.pi, n)
-    elif args.method == "trapezoid":
-        T_sim = trapezoid(f, 0.0, 2.0*np.pi, n)
-    elif args.method == "simpson":
-        T_sim = simpson(f, 0.0, 2.0*np.pi, n)
-    elif args.method == "scipy_trap":
-        T_sim = scipy_trap(f, 0.0, 2.0*np.pi, n)
-    elif args.method == "scipy_simp":
-        T_sim = scipy_simp(f, 0.0, 2.0*np.pi, n)
-    else:
-        raise ValueError("Unknown orbit method")
+    if 0.0 <= e < 1.0:
+        if args.method == "riemann":
+            T_sim = riemann(f, 0.0, 2.0*np.pi, n)
+        elif args.method == "trapezoid":
+            T_sim = trapezoid(f, 0.0, 2.0*np.pi, n)
+        elif args.method == "simpson":
+            T_sim = simpson(f, 0.0, 2.0*np.pi, n)
+        elif args.method == "scipy_trap":
+            T_sim = scipy_trap(f, 0.0, 2.0*np.pi, n)
+        elif args.method == "scipy_simp":
+            T_sim = scipy_simp(f, 0.0, 2.0*np.pi, n)
+        else:
+            raise ValueError("Unknown orbit method")
+        
+        rel_err = abs(T_sim - T_ana) / T_ana
+        print(r"Kepler's 3rd law via $\theta$ integral")
+        print(f"method={args.method:12s}   T_sim={T_sim:.9e}   T_ana={T_ana:.9e}   rel_err={rel_err:.3e}")
+
+        if args.check_divergence:
+            print("Divergence demo requires e > 1; skipping because e < 1.")
+
+    elif e >= 1.0:
+        print("e >= 1 selected (non-elliptic). Period integral is not finite. Skipping period computation.")
+        if not args.check_divergence:
+            print("  (use --check_divergence option for a divergence check)")
+        if args.check_divergence:
+            ns = np.round(np.logspace(2, 5, 10)).astype(int)
+            vals = []
+            # Define the integrand without other parameters
+            g = lambda theta: 1.0 / (1.0 + e * np.cos(theta))**2
+            for ni in ns:
+                if args.method == "riemann":
+                    vals.append(riemann(g, 0.0, 2.0*np.pi, ni))
+                elif args.method == "trapezoid":
+                    vals.append(trapezoid(g, 0.0, 2.0*np.pi, ni))
+                elif args.method == "simpson":
+                    vals.append(simpson(g, 0.0, 2.0*np.pi, ni))
+                elif args.method == "scipy_trap":
+                    vals.append(scipy_trap(g, 0.0, 2.0*np.pi, ni))
+                elif args.method == "scipy_simp":
+                    vals.append(scipy_simp(g, 0.0, 2.0*np.pi, ni))
+                else:
+                    raise ValueError("Unknown orbit method")
+                print(f"number of samplings={ni:6d}  I_est={vals[-1]:.6e}")
+
+            plt.figure()
+            plt.loglog(ns, vals, "o-")
+            plt.xlabel("Number of samplings")
+            plt.ylabel("Integral value")
+            plt.title(f"Divergence check for e={e:.2f}")
+            plt.tight_layout()
+            plt.savefig(args.out_prefix + "_divergence.png", dpi=160)
+            print(f"saved {args.out_prefix + '_divergence.png'}")
+        return
     
-    rel_err = abs(T_sim - T_ana) / T_ana
-    print(r"Kepler's 3rd law via $\theta$ integral")
-    print(f"method={args.method:12s}   T_sim={T_sim:.9e}   T_ana={T_ana:.9e}   rel_err={rel_err:.3e}")
-
-    if args.check_divergence:
-        if e < 1:
-            print("Set e > 1 (hyperbola) for the divergence check.")
-        ns = np.round(np.logspace(2, 5, 10)).astype(int)
-        vals = []
-        for ni in ns:
-            if args.method == "riemann":
-                vals.append(riemann(f, 0.0, 2.0*np.pi, ni))
-            elif args.method == "trapezoid":
-                vals.append(trapezoid(f, 0.0, 2.0*np.pi, ni))
-            elif args.method == "simpson":
-                vals.append(simpson(f, 0.0, 2.0*np.pi, ni))
-            elif args.method == "scipy_trap":
-                vals.append(scipy_trap(f, 0.0, 2.0*np.pi, ni))
-            elif args.method == "scipy_simp":
-                vals.append(scipy_simp(f, 0.0, 2.0*np.pi, ni))
-            else:
-                raise ValueError("Unknown orbit method")
-            print(f"number of samplings={ni:6d}  I_est={vals[-1]:.6e}")
-
-        plt.figure()
-        plt.semilogx(ns, vals, "o-")
-        plt.xlabel("Number of samplings")
-        plt.ylabel("Integral value")
-        plt.title(f"Divergence for e={e:.2f}")
-        plt.tight_layout()
-        plt.savefig(args.out_prefix + "_divergence.png", dpi=160)
-        print(f"saved {args.out_prefix + '_divergence.png'}")
+    else:
+        raise ValueError(f"Invalid value for eccentricity: e={e}. Must be non-negative.")
 
 
 def main():
