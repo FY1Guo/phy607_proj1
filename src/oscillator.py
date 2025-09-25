@@ -88,15 +88,6 @@ def steady_amp(t, x, fraction=0.5):
     return 0.5 * (np.max(xt) - np.min(xt))
 
 
-def analytic_resonance(m, k, c):
-    omega0 = np.sqrt(k / m)
-    beta = c / (2 * m)
-    if beta < omega0:
-        return np.sqrt(omega0**2 - 2 * beta**2)
-    else:
-        print("Not in underdamped regime, resonant frequency not defined")
-
-
 def analytic_oscillator(m, k, c, omega, F0, x0, v0):
     omega0 = np.sqrt(k / m)
     beta = c / (2 * m)

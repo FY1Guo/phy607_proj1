@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 
-from src.oscillator import euler_solver, rk4_solver, scipy_ivp, steady_amp, amp_phase
+from src.oscillator import euler_solver, rk4_solver, scipy_ivp, steady_amp, amp_phase, analytic_oscillator
 from src.orbit import period_integrand, period_kepler, riemann, trapezoid, simpson, scipy_trap, scipy_simp
 
 
@@ -74,6 +74,96 @@ def run_oscillator(args):
         plt.savefig(args.out_prefix + "_resonance.png", dpi=160)
         print(f"saved {args.out_prefix + "_resonance.png"}")
 
+    if args.compare_methods:
+        compare_oscillator_methods(args)
+
+    if args.conv_test:
+        osc_convergence(args)
+
+
+def compare_oscillator_methods(args):
+    m, k, c = args.m, args.k, args.c
+    omega, F0 = args.omega, args.F0
+    x0, v0 = args.x0, args.v0
+    dt, tmax = args.dt, args.tmax
+
+    tE, xE, vE, eE = euler_solver(m, k, c, omega, F0, x0, v0, dt, tmax)
+    tR, xR, vR, eR = rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax)
+    tS, xS, vS, eS = scipy_ivp(m, k, c, omega, F0, x0, v0, dt, tmax)
+    # Analytic result
+    x_ana, regime = analytic_oscillator(m, k, c, omega, F0, x0, v0)
+    x_ana_list = []
+    for t in tR:
+        x_ana_list.append(x_ana(t))
+
+    plt.figure()
+    plt.plot(tE, xE, label="Euler")
+    plt.plot(tR, xR, label="RK4")
+    plt.plot(tS, xS, label="SciPy")
+    plt.plot(tR, x_ana_list, label="Analytic")
+    plt.xlabel(r"$t$ [s]")
+    plt.ylabel(r"$x(t)$ [m]")
+    plt.title("Oscillator: displacement comparison")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(args.out_prefix + "_compare_x.png", dpi=160); print(f"saved {args.out_prefix + "_compare_x.png"}")
+
+    plt.figure()
+    plt.plot(tE, eE, label="Euler")
+    plt.plot(tR, eR, label="RK4")
+    plt.plot(tS, eS, label="SciPy")
+    plt.xlabel(r"$t$ [s]")
+    plt.ylabel(r"$E(t)$ [J]")
+    plt.title("Oscillator: energy comparison")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(args.out_prefix + "_compare_E.png", dpi=160); print(f"saved {args.out_prefix + "_compare_E.png"}")
+
+
+def osc_convergence(args):
+    m, k, c = args.m, args.k, args.c
+    omega, F0 = args.omega, args.F0
+    x0, v0 = args.x0, args.v0
+    tmax = args.tmax
+
+    dts = np.logspace(np.log10(args.dt_min), np.log10(args.dt_max), args.dt_num)
+    err_euler, err_rk4 = [], []
+
+    def rms(y): 
+        return np.sqrt(np.mean(y**2))
+
+    # analytic solution as reference
+    x_ana, regime = analytic_oscillator(m, k, c, omega, F0, x0, v0)
+
+    for dt in dts:
+        tE, xE, _, _ = euler_solver(m, k, c, omega, F0, x0, v0, dt, tmax)
+        err_euler.append(rms(xE - x_ana(tE)))
+
+        tR, xR, _, _ = rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax)
+        err_rk4.append(rms(xR - x_ana(tR)))
+
+    # fit slopes on log-log: error ~ C * dt^p  =>  log(err) = p log(dt) + b
+    def fit_slope(x, y):
+        a, b = np.polyfit(np.log10(x), np.log10(y), 1)
+        return a  # slope p
+
+    k_euler, k_rk4 = fit_slope(dts, err_euler), fit_slope(dts, err_rk4)
+    k_rk4_trun = fit_slope(dts[3:], err_rk4[3:])
+
+    print(f"Orders: Euler ~{k_euler:.2f} (expected ~1), RK4 ~{k_rk4_trun:.2f} (expected ~4)")
+
+    plt.figure()
+    plt.loglog(dts, err_euler, "o-", label=f"Euler (p={k_euler:.2f})")
+    plt.loglog(dts, err_rk4,   "o-", label=f"RK4 (p={k_rk4:.2f})")
+    plt.loglog(dts[3:], err_rk4[3:],   "o-", label=f"RK4 truncated (p={k_rk4_trun:.2f})")
+    plt.xlabel("dt")
+    plt.ylabel("RMS error")
+    plt.title("Oscillator: truncation error scaling")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(args.out_prefix + "_osc_conv.png", dpi=160)
+    print(f"saved {args.out_prefix + "_osc_conv.png"}")
+
 
 def run_orbit(args):
     a, e, mu = args.a, args.e, args.mu
@@ -138,6 +228,97 @@ def run_orbit(args):
     
     else:
         raise ValueError(f"Invalid value for eccentricity: e={e}. Must be non-negative.")
+    
+    if args.compare_methods:
+        compare_orbit_methods(args)
+
+    if args.conv_test:
+        orbit_convergence(args)
+
+
+def compare_orbit_methods(args):
+    mu = args.mu
+    method_funcs = [
+        ("riemann",   riemann),
+        ("trapezoid", trapezoid),
+        ("simpson",   simpson),
+        ("scipy_trap",scipy_trap),
+        ("scipy_simp",scipy_simp),
+    ]
+
+    e = args.e
+    if not (0.0 <= e < 1.0):
+        print("For a-sweep use 0 <= e < 1.")
+        return
+
+    a_vals = np.linspace(args.a_min, args.a_max, args.a_num)
+    T_ana = 2*np.pi*np.sqrt(a_vals**3 / mu)
+
+    # compute T for each method at fixed N
+    N = args.n
+    results = {name: [] for name, _ in method_funcs}
+    for a in a_vals:
+        f = period_integrand(a, e, mu)
+        for name, fun in method_funcs:
+            # Simpson needs even N
+            N_use = N + (N % 2) if name == "simpson" else N
+            results[name].append(fun(f, 0.0, 2.0*np.pi, N_use))
+
+    # plot
+    plt.figure()
+    plt.plot(a_vals, T_ana, "-", label="analytic")
+    for name in results:
+        plt.plot(a_vals, results[name], "o-", label=name)
+    plt.xlabel("a")
+    plt.ylabel("period T")
+    plt.title(f"Orbit: T(a) comparison at e={e}, N={N}")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(args.out_prefix + "_orbit_T_of_a.png", dpi=160)
+    print(f"saved {args.out_prefix + "_orbit_T_of_a.png"}")
+
+
+def orbit_convergence(args):
+    a, e, mu = args.a, args.e, args.mu
+    T_ana = period_kepler(a, mu)
+    f = period_integrand(a, e, mu)
+
+    if e >= 1.0:
+        print("e >= 1 selected (non-elliptic). Period integral is not finite. Skipping convergence test.")
+        return
+
+    ns = np.unique(np.round(np.logspace(np.log10(args.n_min), np.log10(args.n_max), args.n_num)).astype(int))
+    err_riem, err_trap, err_simp = [], [], []
+    for ni in ns:
+        err_riem.append(abs(riemann(f, 0.0, 2*np.pi, ni)   - T_ana) / T_ana)
+        err_trap.append(abs(trapezoid(f,0.0, 2*np.pi, ni) - T_ana) / T_ana)
+        n2 = ni + (ni % 2)  # even for Simpson
+        err_simp.append(abs(simpson(f, 0.0, 2*np.pi, n2) - T_ana) / T_ana)
+
+    def fit_slope(x, y):
+        x = np.array(x)
+        y = np.array(y)
+        mask = y > 1e-14  # set a floor to avoid 0 divisor
+        a, b = np.polyfit(np.log10(x[mask]), np.log10(y[mask]), 1)
+        return a
+
+    k_riem = fit_slope(ns, err_riem)   # expect ~ -2
+    k_trap = fit_slope(ns, err_trap)   # expect ~ -2
+    k_simp = fit_slope(ns, err_simp)   # expect ~ -4
+
+    print(f"Estimated behavior: Riemann ~ N^{k_riem:.2f}, Trapezoid ~ N^{k_trap:.2f}, Simpson ~ N^{k_simp:.2f}")
+
+    plt.figure()
+    plt.loglog(ns, err_riem, "o-", label=f"Riemann (~N^{k_riem:.2f})")
+    plt.loglog(ns, err_trap, "o-", label=f"Trapezoid (~N^{k_trap:.2f})")
+    plt.loglog(ns, err_simp, "o-", label=f"Simpson (~N^{k_simp:.2f})")
+    plt.xlabel("N panels")
+    plt.ylabel("Relative error")
+    plt.title("Orbit truncation error vs N")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(args.out_prefix + "_orbit_conv.png", dpi=160)
+    print(f"saved {args.out_prefix + "_orbit_conv.png"}")
 
 
 def main():
@@ -164,6 +345,13 @@ def main():
     po.add_argument("--res_n", type=int, default=30, help="sampling points for frequency")
     po.add_argument("--res_cycles", type=float, default=60.0, help="drive cycles to simulate")
     po.add_argument("--res_npc", type=int, default=200, help="points per cycle")
+    po.add_argument("--compare_methods", action="store_true",
+                help="Compare E(t) for Euler, RK4, SciPy at the same dt, tmax")
+    po.add_argument("--conv_test", action="store_true",
+                help="Run truncation error study vs dt")
+    po.add_argument("--dt_min", type=float, default=5e-4, help="min step size for convergence test")
+    po.add_argument("--dt_max", type=float, default=5e-2, help="max step size for convergence test")
+    po.add_argument("--dt_num", type=int, default=8, help="num of steps for convergence test")
     po.set_defaults(func=run_oscillator)
 
     # Orbit
@@ -171,11 +359,21 @@ def main():
     pk.add_argument("--method",
                     choices=["riemann", "trapezoid", "simpson", "scipy_trap", "scipy_simp"], default="simpson")
     pk.add_argument("--a", type=float, default=3.0, help="semi-major axis")
-    pk.add_argument("--e", type=float, default=0.3, help="eccentricity")
+    pk.add_argument("--e", type=float, default=0.6, help="eccentricity")
     pk.add_argument("--mu", type=float, default=1.0, help="gravitational parameter GM")
-    pk.add_argument("--n", type=int, default=4000)
+    pk.add_argument("--n", type=int, default=1000)
     pk.add_argument("--check_divergence", action="store_true", help="Check the divergence of the integral for e>=1")
     pk.add_argument("--out_prefix", type=str, default="orbit", help="output prefix")
+    pk.add_argument("--compare_methods", action="store_true",
+                help="Compare all integral methods at the same N")
+    pk.add_argument("--a_min", type=float, default=1.0, help="min a for sweeping")
+    pk.add_argument("--a_max", type=float, default=10.0, help="max a for sweeping")
+    pk.add_argument("--a_num", type=int, default=12, help="number of a for sweeping")
+    pk.add_argument("--conv_test", action="store_true",
+                    help="Run truncation error study vs N")
+    pk.add_argument("--n_min", type=int, default=2, help="min number of intervals for convergence test")
+    pk.add_argument("--n_max", type=int, default=9, help="max number of intervals for convergence test")
+    pk.add_argument("--n_num", type=int, default=8, help="num of sampling points for convergence test")
     pk.set_defaults(func=run_orbit)
 
     args = p.parse_args()
