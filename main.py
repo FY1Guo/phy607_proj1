@@ -105,3 +105,32 @@ def run_orbit(args):
     print(r"Kepler's 3rd law via $theta$ integral")
     print(f"method={args.method:12s}   T_sim={T_sim:.9e}   T_ana={T_ana:.9e}   rel_err={rel_err:.3e}")
 
+    if args.check_divergence:
+        if e < 1:
+            print("Set e > 1 (hyperbola) for the divergence check.")
+        ns = np.logspace(2, 5, 10)
+        vals = []
+        for ni in ns:
+            if args.method == "riemann":
+                vals.append(riemann(f, 0.0, 2.0*np.pi, ni))
+            elif args.method == "trapezoid":
+                vals.append(trapezoid(f, 0.0, 2.0*np.pi, ni))
+            elif args.method == "simpson":
+                vals.append(simpson(f, 0.0, 2.0*np.pi, ni))
+            elif args.method == "scipy_trap":
+                vals.append(scipy_trap(f, 0.0, 2.0*np.pi, ni))
+            elif args.method == "scipy_simp":
+                vals.append(scipy_simp(f, 0.0, 2.0*np.pi, ni))
+            else:
+                raise ValueError("Unknown orbit method")
+            print(f"number of samplings={ni:6d}  I_est={vals[-1]:.6e}")
+
+        plt.figure()
+        plt.semilogx(ns, vals, "o-")
+        plt.xlabel("Number of samplings")
+        plt.ylabel("I_est")
+        plt.title(f"Divergence for e={e:.2f}")
+        plt.tight_layout()
+        plt.savefig(args.out_prefix + "_divergence.png", dpi=160)
+        print(f"saved {args.out_prefix + '_divergence.png'}")
+
