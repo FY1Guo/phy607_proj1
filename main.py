@@ -269,13 +269,13 @@ def compare_orbit_methods(args):
     plt.plot(a_vals, T_ana, "-", label="analytic")
     for name in results:
         plt.plot(a_vals, results[name], "o-", label=name)
-    plt.xlabel("a")
-    plt.ylabel("period T")
+    plt.xlabel(r"$a$ [m]")
+    plt.ylabel(r"period $T$ [s]")
     plt.title(f"Orbit: T(a) comparison at e={e}, N={N}")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(args.out_prefix + "_orbit_T_of_a.png", dpi=160)
-    print(f"saved {args.out_prefix + "_orbit_T_of_a.png"}")
+    plt.savefig(args.out_prefix + "_compare_T.png", dpi=160)
+    print(f"saved {args.out_prefix + "_compare_T.png"}")
 
 
 def orbit_convergence(args):
