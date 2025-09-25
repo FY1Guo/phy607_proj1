@@ -1,11 +1,10 @@
 import numpy as np
 
 
-def period_integrand(a, e, mu, m):
+def period_integrand(a, e, mu):
     p = a * (1 - e**2)
-    L = m * np.sqrt(mu * p)
     def f(theta):
-        return (p**2 * m / L) / (1 + e * np.cos(theta))**2
+        return (p**2 / np.sqrt(mu * p)) / (1 + e * np.cos(theta))**2
     return f
 
 
@@ -24,7 +23,7 @@ def trapezoid(f, a0, b0, n):
     x = np.linspace(a0, b0, n+1)
     y = f(x)
     h = (b0 - a0)/n
-    return h / 2 * (y[0] + 2 * sum(y[1:-1]) + y[-1])
+    return h / 2 * (y[0] + 2 * np.sum(y[1:-1]) + y[-1])
 
 
 def simpson(f, a0, b0, n):
@@ -50,5 +49,5 @@ def scipy_simp(f, a0, b0, n):
         n += 1  # Simpson requires even n
     x = np.linspace(a0, b0, n+1)
     y = f(x)
-    return simpson(y, x)
+    return simpson(y, x=x)
 

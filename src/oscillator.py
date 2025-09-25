@@ -1,27 +1,20 @@
 import numpy as np
 
 
-m = 0.5
-k = 1
-c = 0.2
-omega = 2
-F0 = 1
-
-
 def rhs(t, x, v, m, k, c, omega, F0):
     a = (F0 * np.cos(omega * t) - c * v - k * x) / m
     return v, a
 
 
 def energy(x, v, m, k):
-    potential = 1 / 2 * k * x**2
-    kinetic = 1 / 2 * m * v**2
+    potential = 0.5 * k * x**2
+    kinetic = 0.5 * m * v**2
     total = potential + kinetic
     return total
 
 
 def euler_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
-    e0 = energy(x0, v0, k, m)
+    e0 = energy(x0, v0, m, k)
     t_hist = [0.0]; x_hist = [x0]; v_hist = [v0]; e_hist = [e0]
 
     t, x, v = 0.0, x0, v0
@@ -42,7 +35,7 @@ def euler_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
 
 
 def rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
-    e0 = energy(x0, v0, k, m)
+    e0 = energy(x0, v0, m, k)
     t_hist = [0.0]; x_hist = [x0]; v_hist = [v0]; e_hist = [e0]
 
     t, x, v = 0.0, x0, v0
@@ -66,7 +59,8 @@ def rk4_solver(m, k, c, omega, F0, x0, v0, dt, tmax):
 
 def scipy_ivp(m, k, c, omega, F0, x0, v0, dt, tmax):
     from scipy.integrate import solve_ivp
-    t_hist = np.arange(0.0, tmax, dt)
+    n = int(round(tmax / dt))
+    t_hist = np.linspace(0.0, tmax, n+1)
     def f(t, y):
         x, v = y
         dx, dv = rhs(t, x, v, m, k, c, omega, F0)

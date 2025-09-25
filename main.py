@@ -7,28 +7,6 @@ from src.orbit import period_integrand, period_kepler, riemann, trapezoid, simps
 
 
 
-def plot_x(t, x, title, out):
-    plt.figure()
-    plt.plot(t, x)
-    plt.xlabel(r"$t [s]$")
-    plt.ylabel(r"$x(t) [m]$")
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig(out, dpi=160)
-    print(f"saved {out}")
-
-
-def plot_energy(t, E, title, out):
-    plt.figure()
-    plt.plot(t, E)
-    plt.xlabel(r"$t$")
-    plt.ylabel(r"$E(t) [J]$")
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig(out, dpi=160)
-    print(f"saved {out}")
-
-
 def run_oscillator(args):
     m, k, c = args.m, args.k, args.c
     omega, F0 = args.omega, args.F0
@@ -44,8 +22,24 @@ def run_oscillator(args):
     else:
         raise ValueError("Unknown oscillator method")
     
-    plot_x(t, x, f"Trajectory of the oscillator ({args.method})", args.out_prefix + "_x.png")
-    plot_energy(t, e, f"Energy of the oscillator ({args.method})", args.out_prefix + "_E.png")
+    if not args.resonance:
+        plt.figure()
+        plt.plot(t, x)
+        plt.xlabel(r"$t$ [s]")
+        plt.ylabel(r"$x(t)$ [m]")
+        plt.title(f"Trajectory of the oscillator ({args.method})")
+        plt.tight_layout()
+        plt.savefig(args.out_prefix + "_x.png", dpi=160)
+        print(f"saved {args.out_prefix + "_x.png"}")
+
+        plt.figure()
+        plt.plot(t, e)
+        plt.xlabel(r"$t$ [s]")
+        plt.ylabel(r"$E(t)$ [J]")
+        plt.title(f"Energy of the oscillator ({args.method})")
+        plt.tight_layout()
+        plt.savefig(args.out_prefix + "_E.png", dpi=160)
+        print(f"saved {args.out_prefix + "_E.png"}")
 
     if args.resonance:
         omegas = np.linspace(args.res_min, args.res_max, args.res_n)
@@ -54,12 +48,12 @@ def run_oscillator(args):
         for om in omegas:
             """
             To preserve accuracy when scanning over omega, we specify dt and tmax for each frequency, and use frequency-independent quantities as input.
-            res_cycles: number of drive cycles for each frequency
+            res_cycles: number of cycles for simulation at each frequency
             res_npc: number of points per cycle
             """
             period = 2.0 * np.pi / om
             tmax_r = args.res_cycles * period
-            dt_r = period / args.res_ppc
+            dt_r = period / args.res_npc
             # Since x0, v0 are independent of the resonance, they are set 0 for a better control of the steady state.
             if args.method == "euler":
                 tt, xx, vv, ee = euler_solver(m, k, c, om, F0, 0.0, 0.0, dt_r, tmax_r)
@@ -68,25 +62,24 @@ def run_oscillator(args):
             else:
                 tt, xx, vv, ee = scipy_ivp(m, k, c, om, F0, 0.0, 0.0, dt_r, tmax_r)
             amps_num.append(steady_amp(tt, xx))
-            amps_ana.append(amp_phase(m, k, c, omega, F0)[0])
+            amps_ana.append(amp_phase(m, k, c, om, F0)[0])
         plt.figure()
         plt.plot(omegas, amps_num, "o", label="numerical")
         plt.plot(omegas, amps_ana, "-", label="analytic")
-        plt.xlabel(r"drive frequency $omega [s^{-1}]$")
-        plt.ylabel(r"steady state amplitude $X [m]$")
+        plt.xlabel(r"Drive frequency $\omega$ [s$^{-1}$]")
+        plt.ylabel(r"Steady state amplitude $X$ [m]")
         plt.title(f"Resonance ({args.method})")
         plt.legend()
         plt.tight_layout()
-        out = args.out_prefix + "_resonance.png"
-        plt.savefig(out, dpi=160)
-        print(f"saved {out}")
+        plt.savefig(args.out_prefix + "_resonance.png", dpi=160)
+        print(f"saved {args.out_prefix + "_resonance.png"}")
 
 
 def run_orbit(args):
-    a, e, mu, m = args.a, args.e, args.mu, args.m
+    a, e, mu = args.a, args.e, args.mu
     n = args.n
     T_ana = period_kepler(a, mu)
-    f = period_integrand(a, e, mu, m)
+    f = period_integrand(a, e, mu)
 
     if args.method == "riemann":
         T_sim = riemann(f, 0.0, 2.0*np.pi, n)
@@ -102,13 +95,13 @@ def run_orbit(args):
         raise ValueError("Unknown orbit method")
     
     rel_err = abs(T_sim - T_ana) / T_ana
-    print(r"Kepler's 3rd law via $theta$ integral")
+    print(r"Kepler's 3rd law via $\theta$ integral")
     print(f"method={args.method:12s}   T_sim={T_sim:.9e}   T_ana={T_ana:.9e}   rel_err={rel_err:.3e}")
 
     if args.check_divergence:
         if e < 1:
             print("Set e > 1 (hyperbola) for the divergence check.")
-        ns = np.logspace(2, 5, 10)
+        ns = np.round(np.logspace(2, 5, 10)).astype(int)
         vals = []
         for ni in ns:
             if args.method == "riemann":
@@ -128,9 +121,54 @@ def run_orbit(args):
         plt.figure()
         plt.semilogx(ns, vals, "o-")
         plt.xlabel("Number of samplings")
-        plt.ylabel("I_est")
+        plt.ylabel("Integral value")
         plt.title(f"Divergence for e={e:.2f}")
         plt.tight_layout()
         plt.savefig(args.out_prefix + "_divergence.png", dpi=160)
         print(f"saved {args.out_prefix + '_divergence.png'}")
 
+
+def main():
+    p = argparse.ArgumentParser(description="Assemble oscillator and orbit problems")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    # Oscillator
+    po = sub.add_parser("oscillator", help="Driven damped oscillator")
+    po.add_argument("--method", choices=["euler", "rk4", "scipy"], default="rk4")
+    po.add_argument("--m", type=float, default=1.0, help="mass")
+    po.add_argument("--k", type=float, default=1.0, help="spring constant")
+    po.add_argument("--c", type=float, default=0.2, help="damping coefficient")
+    po.add_argument("--omega", type=float, default=1.0, help="driving frequency")
+    po.add_argument("--F0", type=float, default=1.0, help="driving amplitude")
+    po.add_argument("--x0", type=float, default=0.0, help="initial position")
+    po.add_argument("--v0", type=float, default=1.0, help="initial velocity")
+    po.add_argument("--dt", type=float, default=1e-3, help="time step")
+    po.add_argument("--tmax", type=float, default=60.0, help="max simulation time")
+    po.add_argument("--out_prefix", type=str, default="osc", help="output prefix")
+    # Resonance options
+    po.add_argument("--resonance", action="store_true", help="Analyze the resonant behavior")
+    po.add_argument("--res_min", type=float, default=0.3, help="min simulation frequency")
+    po.add_argument("--res_max", type=float, default=2.0, help="max simulation frequency")
+    po.add_argument("--res_n", type=int, default=30, help="sampling points for frequency")
+    po.add_argument("--res_cycles", type=float, default=60.0, help="drive cycles to simulate")
+    po.add_argument("--res_npc", type=int, default=200, help="points per cycle")
+    po.set_defaults(func=run_oscillator)
+
+    # Orbit
+    pk = sub.add_parser("orbit", help="Kepler period integral")
+    pk.add_argument("--method",
+                    choices=["riemann", "trapezoid", "simpson", "scipy_trap", "scipy_simp"], default="simpson")
+    pk.add_argument("--a", type=float, default=3.0, help="semi-major axis")
+    pk.add_argument("--e", type=float, default=0.3, help="eccentricity")
+    pk.add_argument("--mu", type=float, default=1.0, help="gravitational parameter GM")
+    pk.add_argument("--n", type=int, default=4000)
+    pk.add_argument("--check_divergence", action="store_true", help="Check the divergence of the integral for e>=1")
+    pk.add_argument("--out_prefix", type=str, default="orbit", help="output prefix")
+    pk.set_defaults(func=run_orbit)
+
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
